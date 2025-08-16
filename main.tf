@@ -1,6 +1,12 @@
-# S3 buckets using for_each to reduce repetition
+# Data sources for existing buckets in prod environment
+data "aws_s3_bucket" "existing_buckets" {
+  for_each = local.is_prod ? local.all_buckets : {}
+  bucket   = each.value.name
+}
+
+# S3 buckets - create only in nonprod or source bucket in prod
 resource "aws_s3_bucket" "buckets" {
-  for_each = local.buckets
+  for_each = local.buckets_to_create
   
   bucket = each.value.name
   tags = merge(local.common_tags, {
@@ -8,7 +14,7 @@ resource "aws_s3_bucket" "buckets" {
   })
 }
 
-# Bucket versioning configuration
+# Bucket versioning configuration - only for created buckets
 resource "aws_s3_bucket_versioning" "buckets" {
   for_each = aws_s3_bucket.buckets
   
@@ -18,7 +24,7 @@ resource "aws_s3_bucket_versioning" "buckets" {
   }
 }
 
-# Bucket server-side encryption configuration
+# Bucket server-side encryption configuration - only for created buckets
 resource "aws_s3_bucket_server_side_encryption_configuration" "buckets" {
   for_each = aws_s3_bucket.buckets
   
@@ -26,7 +32,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "buckets" {
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.keys[each.key].arn
+      kms_master_key_id = strcontains(each.key, "source") ? local.source_kms_key_arn : local.destination_kms_key_arn
       sse_algorithm     = "aws:kms"
     }
     bucket_key_enabled = true

@@ -1,12 +1,14 @@
-# S3 bucket replication configuration
+# S3 bucket replication configurations - one per source bucket
 resource "aws_s3_bucket_replication_configuration" "replication" {
+  for_each = local.bucket_pairs
+  
   depends_on = [aws_s3_bucket_versioning.buckets]
 
   role   = aws_iam_role.replication.arn
-  bucket = aws_s3_bucket.buckets["source"].id
+  bucket = local.get_bucket_reference[each.key].source.id
 
   rule {
-    id     = "ReplicateEncryptedObjects"
+    id     = "ReplicateEncryptedObjects-${each.key}"
     status = "Enabled"
 
     # Only replicate objects encrypted with the source KMS key
@@ -21,12 +23,12 @@ resource "aws_s3_bucket_replication_configuration" "replication" {
     }
 
     destination {
-      bucket        = aws_s3_bucket.buckets["destination"].arn
+      bucket        = local.get_bucket_reference[each.key].destination.arn
       storage_class = "STANDARD"
 
       # Encrypt with destination KMS key
       encryption_configuration {
-        replica_kms_key_id = aws_kms_key.keys["destination"].arn
+        replica_kms_key_id = local.destination_kms_key_arn
       }
 
       # Replicate access control lists
